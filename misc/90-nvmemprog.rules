@@ -1,0 +1,4 @@
+# NVMemProg memory programmer udev rules
+# To allow running host software without root, copy this file to /etc/udev/rules.d/
+
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idProduct}=="4801", ATTRS{idVendor}=="1209", MODE="0666"
