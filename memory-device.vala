@@ -19,11 +19,11 @@
 
 public class MemoryDeviceList {
   private DBManager db_manager;
-  
+
   public MemoryDeviceList (DBManager db_manager) {
     this.db_manager = db_manager;
   }
-  
+
   public HashTable<int, string> get_device_types () throws DBError {
     var table = new HashTable<int, string> (direct_hash, direct_equal);
     db_manager.query_table ("DeviceTypes", {"Id", "Name"}, "Id");
@@ -33,7 +33,7 @@ public class MemoryDeviceList {
     }
     return table;
   }
-  
+
   public HashTable<int, string> get_devices (int type_id) throws DBError {
     var table = new HashTable<int, string> (direct_hash, direct_equal);
     db_manager.query_table_filtered_by_id ("Devices", {"Id", "Name"}, "DeviceTypeId", type_id, "Name");
@@ -47,7 +47,7 @@ public class MemoryDeviceList {
     }
     return table;
   }
-  
+
   public HashTable<int, string> get_device_variants (int device_id) throws DBError {
     var table = new HashTable<int, string> (direct_hash, direct_equal);
     db_manager.query_table_filtered_by_id ("DeviceVariants", {"Id", "Name"}, "DeviceId", device_id, "Name");
@@ -70,14 +70,14 @@ public class MemoryDevice {
   private DBManager db_manager;
   public int device_id { get; private set; }
   public int variant_id { get; private set; }
-  
+
   public MemoryDevice (DBManager db_manager, int variant_id) throws DBError {
     this.db_manager = db_manager;
     this.variant_id = variant_id;
     this.device_id = (int) db_manager.query_related_value ("Devices", "Id", "DeviceVariants", "DeviceId", variant_id).get_int64 ();
   }
-  
-  
+
+
   public string get_dev_type () throws DBError { return db_manager.query_related_value ("DeviceTypes", "Name", "Devices", "DeviceTypeId", device_id).get_string (); }
   public string get_name () throws DBError { return db_manager.query_value ("DeviceVariants", "Name", variant_id).get_string (); }
   public string get_manufacturer () throws DBError { return db_manager.query_related_value ("Manufacturers", "Name", "Devices", "ManufacturerId", device_id).get_string (); }
@@ -144,19 +144,19 @@ public class MemoryDevice {
 public class MemoryDeviceConfig {
   MemoryDevice device;
   NVMemProgDevice nvmemprog;
-  
+
   HashTable<string, int> ctl_pin_map;
-  
+
   const int ADDRESS_BUS_WIDTH_FX = 9;
   const int ADDRESS_BUS_WIDTH_MAX = 9+16;
   const int DATA_BUS_WIDTH_MAX = 16;
-  
+
   public delegate void FpgaRegisterConfig () throws DBError, UsbError;
   public delegate void InterfaceConfig () throws DBError, UsbError;
-  
+
   public FpgaRegisterConfig configure_fpga_registers;
   public InterfaceConfig configure_interface;
-  
+
   const float DEFAULT_VCC_RATE = 0.5f;
   const float DEFAULT_VPP_RATE = 0.25f;
   public float vcc { get; private set; }
@@ -167,12 +167,12 @@ public class MemoryDeviceConfig {
   public float vpp_rate { get; private set; }
   public uint icc { get; private set; }
   public uint ipp { get; private set; }
-  
-  
+
+
   public MemoryDeviceConfig (MemoryDevice device, NVMemProgDevice nvmemprog) throws DBError {
     this.device = device;
     this.nvmemprog = nvmemprog;
-    
+
     ctl_pin_map = new HashTable<string, int> (str_hash, str_equal);
     // TODO: make this mapping configurable in the UI or in the database
     ctl_pin_map.insert ("CE#", 0);
@@ -180,7 +180,7 @@ public class MemoryDeviceConfig {
     ctl_pin_map.insert ("PGM#", 1);
     ctl_pin_map.insert ("OE#", 2);
     ctl_pin_map.insert ("OE#/Vpp", 2);
-    
+
     vcc = device.get_vcc ();
     vcc_prog = device.get_vcc_prog ();
     vcc_rate = DEFAULT_VCC_RATE;
@@ -189,7 +189,7 @@ public class MemoryDeviceConfig {
     vpp_rate = DEFAULT_VPP_RATE;
     icc = device.get_icc ();
     ipp = device.get_ipp ();
-    
+
     switch (device.get_fpga_module_name ()) {
       case "Universal":
         configure_fpga_registers = configure_fpga_registers_universal;
@@ -200,7 +200,7 @@ public class MemoryDeviceConfig {
       default:
         assert_not_reached ();
     }
-    
+
     switch (device.get_interface_name ()) {
       case "mx28f":
         configure_interface = configure_interface_mx28f;
@@ -217,24 +217,27 @@ public class MemoryDeviceConfig {
       case "29c":
         configure_interface = configure_interface_29c;
         break;
+      case "mbm27c":
+        configure_interface = configure_interface_mbm27c;
+        break;
       default:
         assert_not_reached ();
     }
   }
-  
-  
+
+
   public void configure_driver (MemoryAction.Type action) throws DBError, UsbError {
     NVMemProg.DriverConfig _config = NVMemProg.DriverConfig ();
     NVMemProg.DriverConfig *config = &_config;
-    
+
     // unused pins
     for (int i = 0; i < config.pin_config.length; i++)
       config.pin_config[i] = NVMemProg.DriverPinConfig.IO | NVMemProg.DRIVER_PIN_CONFIG_PULL_UP_DISABLE;
     // GND
-    foreach (int pin_num in device.get_pin_numbers ("GND")) 
+    foreach (int pin_num in device.get_pin_numbers ("GND"))
       config.pin_config[pin_num-1] = NVMemProg.DriverPinConfig.GND | NVMemProg.DRIVER_PIN_CONFIG_PULL_UP_DISABLE;
     // Vcc
-    foreach (int pin_num in device.get_pin_numbers ("Vcc")) 
+    foreach (int pin_num in device.get_pin_numbers ("Vcc"))
       config.pin_config[pin_num-1] = NVMemProg.DriverPinConfig.VCC | NVMemProg.DRIVER_PIN_CONFIG_PULL_UP_DISABLE;
     // Vpp/Vid
     foreach (int pin_num in device.get_pin_numbers ("Vpp")){
@@ -251,16 +254,16 @@ public class MemoryDeviceConfig {
       if (action == MemoryAction.Type.READ_ID)
         config.pin_config[pin_num-1] = NVMemProg.DriverPinConfig.VPP | NVMemProg.DRIVER_PIN_CONFIG_PULL_UP_DISABLE;
     }
-    
+
     nvmemprog.configure_driver ((uint8[]) config);
   }
-  
-  
+
+
   // FPGA registers config functions
   private void configure_fpga_registers_universal () throws DBError, UsbError {
     NVMemProg.FpgaUnivRegisters _regs = NVMemProg.FpgaUnivRegisters ();
     NVMemProg.FpgaUnivRegisters* regs = &_regs;
-    
+
     // unused pins
     for (int i = 0; i < regs.mem_mux_selector.length; i++) {
       regs.mem_mux_selector[i] = NVMemProg.FpgaUnivMuxSelector.LOW;  // Hi-Z
@@ -288,19 +291,19 @@ public class MemoryDeviceConfig {
     }
     // ready
     // ...
-    
+
     nvmemprog.write_fpga_registers (0, (uint8[]) regs);
   }
-  
+
   private void configure_fpga_registers_spi () throws DBError, UsbError {
-    
+
   }
-  
-  
+
+
   // Interface config functions
   private void cfg_ifc_address_pin_mapping () throws DBError, UsbError {
     uint8[] addr_map = {};
-    
+
     for (int i = ADDRESS_BUS_WIDTH_FX; i < ADDRESS_BUS_WIDTH_MAX; i++) {
       if (i == 9) {
         foreach (int pin_num in device.get_pin_numbers ("A9/Vid"))
@@ -312,7 +315,7 @@ public class MemoryDeviceConfig {
     }
     nvmemprog.configure_memory_interface (NVMemProg.InterfaceConfigType.ADDRESS_PIN_MAPPING, addr_map, 0);
   }
-  
+
   private void cfg_ifc_block_structure () throws DBError, UsbError {
     if (device.has_block_structure() == false)
       throw new DBError.ERROR ("Device has no defined block structure, required to configure interface");
@@ -328,25 +331,29 @@ public class MemoryDeviceConfig {
     }
     nvmemprog.configure_memory_interface (NVMemProg.InterfaceConfigType.BLOCK_STRUCTURE, block_addr_serialized, 0);
   }
-  
+
   public void configure_interface_mx28f () throws DBError, UsbError {
     cfg_ifc_address_pin_mapping ();
   }
-  
+
   public void configure_interface_27c512 () throws DBError, UsbError {
     cfg_ifc_address_pin_mapping ();
   }
-  
+
   public void configure_interface_28f () throws DBError, UsbError {
     cfg_ifc_address_pin_mapping ();
     cfg_ifc_block_structure ();
   }
-  
+
   public void configure_interface_am27 () throws DBError, UsbError {
     cfg_ifc_address_pin_mapping ();
   }
-  
+
   public void configure_interface_29c () throws DBError, UsbError {
+    cfg_ifc_address_pin_mapping ();
+  }
+
+  public void configure_interface_mbm27c () throws DBError, UsbError {
     cfg_ifc_address_pin_mapping ();
   }
 }
