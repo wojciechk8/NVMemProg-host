@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-  
+
 
 public class MemoryAction {
   MemoryDevice device;
@@ -27,16 +27,16 @@ public class MemoryAction {
   bool overcurrent;
   ulong overcurrent_hadler_id;
   SourceFunc action_close_callback;
-  const int POWER_UP_DELAY = 80;
+  const int POWER_UP_DELAY = 400;
   const uint UPDATE_TRANSFER_INTERVAL = 300;
-  
+
   public enum Type {
     READ_ID,
     READ,
     WRITE
   }
-  
-  
+
+
   private class Dialog : Gtk.Dialog {
     private Gtk.Label status_label;
     private TransferBox transfer_box;
@@ -53,7 +53,7 @@ public class MemoryAction {
     private uint64 memory_size;
     private const int DIALOG_WIDTH = 430;
     private const int DIALOG_HEIGHT = 80;
-    
+
     private class TransferBox : Gtk.Grid {
       private NVMemProgDevice nvmemprog;
       private Timer timer;
@@ -65,13 +65,13 @@ public class MemoryAction {
       private Gtk.Label transferred_label;
       private Gtk.Label remaining_time_label;
       private Gtk.Label remaining_time_label_t;
-      
+
       public TransferBox (NVMemProgDevice nvmemprog, uint64 memory_size) {
         this.nvmemprog = nvmemprog;
         size = memory_size;
         timer = new Timer ();
         started = false;
-        
+
         var speed_label_t = new Gtk.Label ("Speed: ");
         speed_label_t.set_xalign (1);
         this.attach (speed_label_t, 0, 0);
@@ -79,7 +79,7 @@ public class MemoryAction {
         speed_label.set_use_markup (true);
         speed_label.set_xalign (0);
         this.attach (speed_label, 1, 0);
-        
+
         var transferred_label_t = new Gtk.Label ("Transferred: ");
         transferred_label_t.set_xalign (1);
         this.attach (transferred_label_t, 0, 1);
@@ -87,7 +87,7 @@ public class MemoryAction {
         transferred_label.set_use_markup (true);
         transferred_label.set_xalign (0);
         this.attach (transferred_label, 1, 1);
-        
+
         remaining_time_label_t = new Gtk.Label ("Remaining time: ");
         remaining_time_label_t.set_xalign (1);
         this.attach (remaining_time_label_t, 0, 2);
@@ -95,17 +95,17 @@ public class MemoryAction {
         remaining_time_label.set_use_markup (true);
         remaining_time_label.set_xalign (0);
         this.attach (remaining_time_label, 1, 2);
-        
+
         update_transfer (false);
       }
-      
+
       public void start_transfer_timer () {
         last_time = 0;
         last_transferred = 0;
         started = true;
         timer.start ();
       }
-      
+
       public void update_transfer (bool end) {
         if (started) {
           double elapsed_time = timer.elapsed ();
@@ -132,8 +132,8 @@ public class MemoryAction {
         }
       }
     }
-    
-    
+
+
     public Dialog (string title, Gtk.Window parent, bool show_transfer_box, NVMemProgDevice nvmemprog, uint64 memory_size) {
       this.nvmemprog = nvmemprog;
       this.memory_size = memory_size;
@@ -143,14 +143,14 @@ public class MemoryAction {
       set_border_width (5);
       set_deletable (false);
       set_default_size (DIALOG_WIDTH, DIALOG_HEIGHT);
-      
+
       Gtk.Box content = get_content_area () as Gtk.Box;
       status_label = new Gtk.Label (null);
       progressbar = new Gtk.ProgressBar ();
       log_expander = new Gtk.Expander ("Log messages");
       Gtk.ScrolledWindow log_scrolled = new Gtk.ScrolledWindow (null, null);
       log_view = new Gtk.TextView ();
-      
+
       content.set_spacing (8);
         Gtk.Box hbox = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
         Gtk.Label title_label = new Gtk.Label ("<b>%s</b>".printf(title));
@@ -158,7 +158,7 @@ public class MemoryAction {
         hbox.pack_start (title_label, false);
         hbox.pack_end (status_label, false);
       content.pack_start (hbox, false);
-      
+
       if (show_transfer_box) {
         transfer_box = new TransferBox (nvmemprog, memory_size);
         content.pack_start (transfer_box, true, true, 0);
@@ -185,26 +185,26 @@ public class MemoryAction {
         } );
         log_expander.add (log_scrolled);
       content.pack_start (log_expander, true, true, 0);
-      
+
       abort_button = new Gtk.Button.from_icon_name ("gtk-cancel");
       abort_button.set_label ("Abort");
       add_action_widget (abort_button, Gtk.ResponseType.CANCEL);
-      
+
       close_button = new Gtk.Button.from_icon_name ("gtk-close");
       close_button.set_label ("Close");
       close_button.set_sensitive (false);
       close_button.clicked.connect ( () => { destroy (); } );
       add_action_widget (close_button, Gtk.ResponseType.CLOSE);
       set_focus (abort_button);
-      
+
       timer = new Timer ();
       reset_timestamp ();
-      
+
       transfer_timeout_id = 0;
       activity_timeout_id = 0;
     }
-    
-    
+
+
     public void start_transfer_update () {
       transfer_timeout_id = Timeout.add (UPDATE_TRANSFER_INTERVAL, () => {
         transfer_box.update_transfer (false);
@@ -213,15 +213,15 @@ public class MemoryAction {
       });
       transfer_box.start_transfer_timer ();
     }
-    
+
     public void start_activity_update () {
       activity_timeout_id = Timeout.add (UPDATE_TRANSFER_INTERVAL, () => {
         progressbar.pulse ();
         return Source.CONTINUE;
       });
     }
-    
-    
+
+
     public void set_completed (bool done, bool cancelled = false) {
       if (cancelled)
         status_label.set_markup ("<span foreground='orange'>Aborted</span>");
@@ -241,19 +241,19 @@ public class MemoryAction {
       close_button.set_sensitive (true);
       set_focus (close_button);
     }
-    
+
     public void expand_log (bool expand) {
       log_expander.set_expanded (expand);
     }
-    
+
     public void add_log_entry (string text) {
       log_view.buffer.insert (ref log_iter, "\n%s".printf (text), -1);
     }
-    
+
     public void add_log_error (string text) {
       log_view.buffer.insert_with_tags_by_name (ref log_iter, "\nError: %s".printf(text), -1, "error");
     }
-    
+
     public void submit_log_entry (bool done, bool cancelled = false) {
       double timestamp = timer.elapsed ();
       if (cancelled)
@@ -262,27 +262,27 @@ public class MemoryAction {
         log_view.buffer.insert_with_tags_by_name (ref log_iter, done ? "\tdone" : "\terror", -1, done ? "done" : "error");
       log_view.buffer.insert_with_tags_by_name (ref log_iter, "\t%02u:%02.1fs".printf((uint) timestamp/60, timestamp%60), -1, "timestamp");
     }
-    
+
     public void submit_log_entry_with_text (string text) {
       double timestamp = timer.elapsed ();
       log_view.buffer.insert (ref log_iter, "\t%s".printf(text), -1);
       log_view.buffer.insert_with_tags_by_name (ref log_iter, "\t%02u:%02.1fs".printf((uint) timestamp/60, timestamp%60), -1, "timestamp");
     }
-    
+
     public void reset_timestamp () {
       timer.start ();
     }
   }
-  
-  
+
+
   public MemoryAction (MemoryDevice device, MemoryDeviceConfig config, NVMemProgDevice nvmemprog, Gtk.Window parent_window) {
     this.device = device;
     this.config = config;
     this.nvmemprog = nvmemprog;
     this.parent_window = parent_window;
   }
-  
-  
+
+
   private void on_dialog_response (int response_id) {
     switch (response_id) {
       case Gtk.ResponseType.CANCEL:
@@ -295,7 +295,7 @@ public class MemoryAction {
         break;
     }
   }
-  
+
   private void init_dialog (string title, bool show_transfer_box) {
     overcurrent = false;
     cancellable = new Cancellable ();
@@ -309,7 +309,7 @@ public class MemoryAction {
     dialog.response.connect (on_dialog_response);
     dialog.show_all ();
   }
-  
+
   private void show_error (string error) {
     if (overcurrent) {
       dialog.submit_log_entry (false);
@@ -326,7 +326,7 @@ public class MemoryAction {
     }
   }
 
-  
+
   private async void init_action (Type action_type) throws UsbError, DBError, IOError {
     if (nvmemprog.is_fpga_configured ()) {
       dialog.add_log_entry ("FPGA is already configured");
@@ -386,8 +386,8 @@ public class MemoryAction {
     nvmemprog.abort_memory_operation ();
     dialog.submit_log_entry (true);
   }
-  
-  
+
+
   private async void finish_action () {
     try {
       dialog.add_log_entry ("Aborting memory operation...");
@@ -433,8 +433,8 @@ public class MemoryAction {
     dialog.add_log_entry ("");
     Timeout.add (POWER_UP_DELAY, () => { finish_action.callback (); return Source.REMOVE; } ); yield;
   }
-  
-  
+
+
   private string format_id (uint8[] id) {
     string res;
     res = "0x";
@@ -442,12 +442,12 @@ public class MemoryAction {
       res += "%02hhX".printf (byte);
     return res;
   }
-  
+
   private async bool read_id_priv () throws UsbError, DBError, IOError {
     uint8[]? expected_id;
     uint8[] actual_id;
     bool id_ok = true;
-    
+
     expected_id = device.get_manufacturer_code ();
     if (expected_id != null) {
       dialog.add_log_entry ("Reading Manufacturer Id...");
@@ -483,7 +483,7 @@ public class MemoryAction {
     }
     return id_ok;
   }
-  
+
   public async void read_id () {
     bool id_ok;
     action_close_callback = read_id.callback;
@@ -500,7 +500,7 @@ public class MemoryAction {
     }
     yield;
   }
-  
+
   public async void read_data (OutputStream data_stream) {
     bool id_ok;
     action_close_callback = read_data.callback;
@@ -524,7 +524,7 @@ public class MemoryAction {
     }
     yield;
   }
-  
+
   public async void write_data (InputStream data_stream) {
     bool id_ok;
     action_close_callback = write_data.callback;
@@ -549,7 +549,7 @@ public class MemoryAction {
     }
     yield;
   }
-  
+
   public async void verify_data (InputStream data_stream) {
     bool id_ok, verify_ok = false;
     uint64 error_offset = 0;
@@ -579,7 +579,7 @@ public class MemoryAction {
     }
     yield;
   }
-  
+
   public async void erase_chip () {
     bool id_ok, erased = false;
     action_close_callback = erase_chip.callback;
@@ -608,7 +608,7 @@ public class MemoryAction {
     }
     yield;
   }
-  
+
   public async void blank_check () {
     bool id_ok, checked_ok = false;
     uint64 error_offset = 0;
