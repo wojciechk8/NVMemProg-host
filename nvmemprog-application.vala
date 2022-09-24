@@ -194,28 +194,20 @@ class NVMemProgApplication : Gtk.Application {
   private class Buffer {
     public const uint64 MAX_BUFFER_SIZE = 128*1024*1024;
     
-    public HexDocument hexdoc;
-    public GtkHex hexview;
-    
     public string name { get; private set; }
     public string? filename { get; private set; }
     public uint64 size { get; private set; }
     public bool changed { get; private set; }
     public bool is_new { get; private set; }
     public bool is_big { get; private set; }
+
+    private uint8[] data;
     
     
     public Buffer (uint64 size) {
       if (size <= MAX_BUFFER_SIZE) {
-        hexdoc = new HexDocument ();
-        uint8[] data = new uint8[size];
+        data = new uint8[size];
         Memory.set (data, 0xFF, (size_t) size);
-        hexdoc.set_data (0, 0, data, false);
-        hexview = (GtkHex) hexdoc.add_view ();
-        hexdoc.document_changed.connect ( () => {
-          changed = true;
-          is_new = false;
-        });
         is_big = false;
       } else {
         // TODO:
@@ -234,19 +226,13 @@ class NVMemProgApplication : Gtk.Application {
     public Buffer.from_file (string filename, uint64 size) throws Error {
       File file = File.new_for_path(filename);
       int64 file_size = file.query_info (FileAttribute.STANDARD_SIZE, FileQueryInfoFlags.NONE).get_size ();
-      hexdoc = new HexDocument ();
-      uint8[] data = new uint8[size];
+      data = new uint8[size];
       var file_stream = file.read ();
       var data_stream = new DataInputStream (file_stream);
       data_stream.read (data[0 : uint64.min (size, file_size)]);
       if (file_size < size) {
         Memory.set (data[file_size : size], 0xFF, (size_t) (size - file_size));
       }
-      hexdoc.set_data (0, 0, data, false);
-      hexview = (GtkHex) hexdoc.add_view ();
-      hexdoc.document_changed.connect ( () => {
-          changed = true;
-        });
       this.size = size;
       changed = size != file_size;
       name = Path.get_basename (filename);
@@ -279,9 +265,10 @@ class NVMemProgApplication : Gtk.Application {
       if (file == null) {
         throw new FileError.FAILED (Posix.strerror (Posix.errno));
       }
-      if (hexdoc.write_to_file (file) != true) {
+      if (file.write(data, 1, data.length) != data.length) {
         throw new FileError.FAILED (Posix.strerror (Posix.errno));
       }
+      file.close();
       this.filename = filename;
       name = Path.get_basename (filename);
       changed = false;
@@ -291,15 +278,13 @@ class NVMemProgApplication : Gtk.Application {
     public void write (uint8[] data, uint offset)
       requires (data.length + offset <= size)
     {
-      hexdoc.set_data (offset, data.length, data, false);
+      Memory.copy (this.data, data, data.length);
     }
     
     public void read (uint8[] data, uint offset)
       requires (data.length + offset <= size)
     {
-      uint8[] temp;
-      temp = hexdoc.get_data (offset, data.length);
-      Memory.copy (data, temp, data.length);
+      Memory.copy (data, this.data, this.data.length);
     }
   }
 
@@ -545,18 +530,15 @@ class NVMemProgApplication : Gtk.Application {
       btn.set_tooltip_text ("Display data grouped by bytes");
       btn.set_label ("B");
       btn.set_action_name ("buffer.data-size");
-      btn.set_action_target_value (new Variant.uint32 (GtkHex.GROUP_BYTE));
       toolbar.add (btn);
     btn = new Gtk.RadioToolButton.from_widget ((Gtk.RadioToolButton) btn);
       btn.set_tooltip_text ("Display data grouped by words");
       btn.set_action_name ("buffer.data-size");
-      btn.set_action_target_value (new Variant.uint32 (GtkHex.GROUP_WORD));
       btn.set_label ("W");
     toolbar.add (btn);
     btn = new Gtk.RadioToolButton.from_widget ((Gtk.RadioToolButton) btn);
       btn.set_tooltip_text ("Display data grouped by dwords");
       btn.set_action_name ("buffer.data-size");
-      btn.set_action_target_value (new Variant.uint32 (GtkHex.GROUP_DWORD));
       btn.set_label ("D");
       toolbar.add (btn);
   }
@@ -588,10 +570,7 @@ class NVMemProgApplication : Gtk.Application {
   
   private void append_buffer_hexview (Buffer buffer) {
     SimpleActionGroup group = (SimpleActionGroup) window.get_action_group ("buffer");
-    buffer.hexview.set_font (GtkHex.load_font (buffer_font_name), buffer_font_desc);
-    buffer.hexview.show_offsets (group.get_action_state ("show-offset").get_boolean ());
-    buffer.hexview.set_geometry (16, 16);
-    buffer_notebook.append_page (buffer.hexview, new Gtk.Label (buffer.name));
+    buffer_notebook.append_page (new Gtk.Label ("Nothing to see here"), new Gtk.Label (buffer.name));
     buffer_notebook.show_all ();
     buffer_notebook.set_current_page ((int) buffer_list.length () - 1);
   }
@@ -703,7 +682,6 @@ class NVMemProgApplication : Gtk.Application {
         if (response == Gtk.ResponseType.ACCEPT) {
           try {
             buffer.save (chooser.get_filename ());
-            buffer_notebook.set_tab_label_text (buffer.hexview, buffer.name);
             update_buffer_actions ();
           } catch (Error e) {
             new ErrorMessage (window, "Error during saving buffer to file", e.message);
@@ -730,7 +708,6 @@ class NVMemProgApplication : Gtk.Application {
         if (response == Gtk.ResponseType.OK) {
           buffer_font_name = chooser.get_font ();
           buffer_font_desc = chooser.get_font_desc ();
-          buffer.hexview.set_font (GtkHex.load_font (buffer_font_name), buffer_font_desc);
         }
         chooser.destroy ();
       });
@@ -740,14 +717,12 @@ class NVMemProgApplication : Gtk.Application {
   private void action_buffer_show_offset_change (SimpleAction action, Variant? val) {
     action.set_state (val);
     foreach (unowned Buffer buf in buffer_list) {
-      buf.hexview.show_offsets (val.get_boolean ());
     }
   }
 
   private void action_buffer_data_size_change (SimpleAction action, Variant? val) {
     action.set_state (val);
     foreach (unowned Buffer buf in buffer_list) {
-      buf.hexview.set_group_type (val.get_uint32 ());
     }
   }
   
@@ -846,7 +821,6 @@ class NVMemProgApplication : Gtk.Application {
     (act = new SimpleAction ("close", null)).activate.connect (action_buffer_close); group.add_action (act);
     (act = new SimpleAction ("font", null)).activate.connect (action_buffer_font); group.add_action (act);
     (act = new SimpleAction.stateful ("show-offset", null, new Variant.boolean (true))).change_state.connect (action_buffer_show_offset_change); group.add_action (act);
-    (act = new SimpleAction.stateful ("data-size", new VariantType("u"), new Variant.uint32 (GtkHex.GROUP_BYTE))).change_state.connect (action_buffer_data_size_change); group.add_action (act);
     win.insert_action_group ("buffer", group);
     
     group = new SimpleActionGroup ();

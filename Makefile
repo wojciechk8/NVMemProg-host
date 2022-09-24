@@ -11,7 +11,7 @@ INCDIR:=../firmware
 
 
 # Vala packages
-VALAC_PKGS:=nvmemprog gtk+-3.0 gio-2.0 posix sqlite3 libusb-1.0 gtkhex-3
+VALAC_PKGS:=nvmemprog gtk+-3.0 gio-2.0 posix sqlite3 libusb-1.0
 
 # Vala flags
 VALAC_FLAGS:=-X -w -X -lm -g --target-glib 2.44 --save-temps
@@ -26,5 +26,5 @@ clean:
 	$(RM) $(TARGET) $(SRC:%.vala=%.c)
 
 # explicit rules
-$(TARGET): $(SRC) nvmemprog.vapi libusb-1.0.vapi gtkhex-3.vapi
+$(TARGET): $(SRC) nvmemprog.vapi libusb-1.0.vapi
 	valac --vapidir=. $(addprefix -X -I,$(INCDIR)) $(addprefix --pkg ,$(VALAC_PKGS)) $(VALAC_FLAGS) $(SRC) -o $@
