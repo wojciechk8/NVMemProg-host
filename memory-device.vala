@@ -313,6 +313,10 @@ public class MemoryDeviceConfig {
           addr_map += (uint8) pin_num-1;
       }
     }
+    foreach(uint8 addr in addr_map) {
+      stdout.printf("%02hhx\n", addr);
+      stdout.flush();
+    }
     nvmemprog.configure_memory_interface (NVMemProg.InterfaceConfigType.ADDRESS_PIN_MAPPING, addr_map, 0);
   }
 
